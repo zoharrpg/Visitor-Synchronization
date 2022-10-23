@@ -1,8 +1,10 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <semaphore.h>
 
 #include "museumsim.h"
+
 
 //
 // In all of the definitions below, some code has been provided as an example
@@ -16,6 +18,45 @@ struct shared_data {
 	// For example:
 	//     pthread_mutex_t ticket_mutex;
 	//     int tickets;
+	
+	pthread_mutex_t lock;
+	// pthread_mutex_t guide_mutex;
+
+	int visitors_waiting;
+	int tickets;
+	int inside_visitor;
+	int inside_guide;
+
+
+	sem_t visitors_arrive;
+	sem_t guide_enter;
+
+	sem_t visitor_limit;
+
+	sem_t guide_admits;
+
+	sem_t visitor_touring;
+
+	sem_t guide_limit;
+
+	sem_t complete_work;
+	sem_t clear_waiting;
+
+	sem_t available_visitors;
+
+	sem_t visitor_waiting2;
+	// sem_t visitor_waiting;
+
+	// sem_t available_ticket;
+	// sem_t available_guide;
+	// sem_t is_visitor_leave;
+	// sem_t visitor_limit_per_guide;
+	// //for inside museum
+	// sem_t guide_limit;
+	// sem_t visitor_limit;
+
+
+	
 };
 
 static struct shared_data shared;
@@ -29,9 +70,48 @@ static struct shared_data shared;
  */
 void museum_init(int num_guides, int num_visitors)
 {
-	// pthread_mutex_init(&shared.ticket_mutex, NULL);
-	//
-	// shared.tickets = MIN(VISITORS_PER_GUIDE * num_guides, num_visitors);
+	
+	
+	pthread_mutex_init(&shared.lock,NULL);
+
+	
+	shared.visitors_waiting=MIN(VISITORS_PER_GUIDE * num_guides, num_visitors);
+	
+	shared.tickets = MIN(VISITORS_PER_GUIDE * num_guides, num_visitors);
+	shared.inside_visitor=0;
+	shared.inside_guide=0;
+	
+	
+
+	sem_init(&shared.visitors_arrive,0,0);
+	
+	sem_init(&shared.guide_enter,0,0);
+	
+	sem_init(&shared.visitor_limit,0,VISITORS_PER_GUIDE*GUIDES_ALLOWED_INSIDE);
+	
+	
+
+	
+	sem_init(&shared.complete_work,0,0);
+	
+	sem_init(&shared.guide_limit,0,GUIDES_ALLOWED_INSIDE);
+	
+	
+	sem_init(&shared.visitor_touring,0,0);
+
+	sem_init(&shared.guide_admits,0,0);
+
+	sem_init(&shared.clear_waiting,0,0);
+	sem_init(&shared.available_visitors,0,0);
+
+	sem_init(&shared.visitor_waiting2,0,0);
+	
+	
+	
+
+
+
+	
 }
 
 
@@ -43,7 +123,31 @@ void museum_init(int num_guides, int num_visitors)
  */
 void museum_destroy()
 {
-	// pthread_mutex_destroy(&shared.ticket_mutex);
+
+	pthread_mutex_destroy(&shared.lock);
+	
+
+	
+	sem_destroy(&shared.visitors_arrive);
+	sem_destroy(&shared.guide_enter);
+	sem_destroy(&shared.visitor_limit);
+	
+
+	sem_destroy(&shared.guide_limit);
+	sem_destroy(&shared.complete_work);
+	sem_destroy(&shared.visitor_touring);
+
+	sem_destroy(&shared.guide_admits);
+	sem_destroy(&shared.clear_waiting);
+	sem_destroy(&shared.available_visitors);
+
+	sem_destroy(&shared.visitor_waiting2);
+
+
+	
+	
+
+
 }
 
 
@@ -52,9 +156,72 @@ void museum_destroy()
  */
 void visitor(int id)
 {
-	// visitor_arrives(id);
-	// visitor_tours(id);
-	// visitor_leaves(id);
+	/*check if there is available tickets, if not just leave and return*/
+	pthread_mutex_lock(&shared.lock);
+	{
+		if(shared.tickets==0){
+			visitor_leaves(id);
+			pthread_mutex_unlock(&shared.lock);
+
+			return;
+		}
+		else{
+			visitor_arrives(id);
+			shared.tickets--;
+		}
+
+	}
+	pthread_mutex_unlock(&shared.lock);
+
+	sem_post(&shared.visitors_arrive);
+	sem_post(&shared.visitor_waiting2);
+	
+
+    sem_wait(&shared.visitor_limit);
+	
+	sem_wait(&shared.guide_enter);
+
+	
+
+	
+
+	sem_wait(&shared.guide_admits);
+
+
+	
+	visitor_tours(id);
+	pthread_mutex_lock(&shared.lock);
+	{
+		shared.visitors_waiting--;
+		shared.inside_visitor++;
+		
+		
+
+	}
+	pthread_mutex_unlock(&shared.lock);
+
+
+	visitor_leaves(id);
+	
+	pthread_mutex_lock(&shared.lock);
+	{
+		
+		shared.inside_visitor--;
+		if(shared.inside_visitor==0){
+			
+			sem_post(&shared.clear_waiting);
+		}
+
+		
+		
+
+	}
+	pthread_mutex_unlock(&shared.lock);
+
+
+	sem_post(&shared.visitor_limit);
+
+	
 }
 
 /**
@@ -62,8 +229,75 @@ void visitor(int id)
  */
 void guide(int id)
 {
-	// guide_arrives(id);
-	// guide_enters(id);
-	// guide_admits(id);
-	// guide_leaves(id);
+	guide_arrives(id);
+	
+	sem_wait(&shared.visitors_arrive);
+	
+	sem_wait(&shared.guide_limit);
+
+	guide_enters(id);
+	pthread_mutex_lock(&shared.lock);
+	{
+		shared.inside_guide++;
+	}
+	pthread_mutex_unlock(&shared.lock);
+
+
+
+	sem_post(&shared.guide_enter);
+
+	
+
+
+	for(int i=0;i<10;i++){
+
+		pthread_mutex_lock(&shared.lock);
+		{
+			if(shared.visitors_waiting==0){
+				shared.inside_guide--;
+				pthread_mutex_unlock(&shared.lock);
+				break;
+			}
+
+		}pthread_mutex_unlock(&shared.lock);
+
+		
+
+	
+		sem_wait(&shared.visitor_waiting2);
+
+		guide_admits(id);
+		
+
+		
+	
+		sem_post(&shared.guide_admits);
+
+	}
+	
+
+	
+
+	sem_wait(&shared.clear_waiting);
+
+	pthread_mutex_lock(&shared.lock);
+	{
+		if(shared.inside_guide==0){
+			
+			sem_post(&shared.complete_work);
+			
+		}
+		else{
+			
+			sem_wait(&shared.complete_work);
+		}
+		printf("inside_guide %d\n",shared.inside_guide);
+	}
+	pthread_mutex_unlock(&shared.lock);
+
+
+	guide_leaves(id);
+
+	sem_post(&shared.guide_limit);
+
 }
