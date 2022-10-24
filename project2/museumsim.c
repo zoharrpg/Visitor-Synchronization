@@ -29,6 +29,7 @@ struct shared_data {
 	int inside_visitor;
 	int inside_guide;
 	int visitors_waiting;
+	int all_visitors;
 
 
 	sem_t visitors_arrive;
@@ -49,6 +50,8 @@ struct shared_data {
 
 	sem_t visitor_leave;
 	sem_t guide_wait;
+
+	sem_t guide_leaves;
 	// sem_t visitor_waiting;
 
 	// sem_t available_ticket;
@@ -85,6 +88,8 @@ void museum_init(int num_guides, int num_visitors)
 	shared.inside_visitor=0;
 	shared.inside_guide=0;
 	shared.numIn=0;
+	shared.all_visitors=0;
+	
 
 	shared.visitors_waiting=MIN(VISITORS_PER_GUIDE * num_guides, num_visitors);
 	
@@ -114,6 +119,9 @@ void museum_init(int num_guides, int num_visitors)
 	sem_init(&shared.visitor_leave,0,0);
 
 	sem_init(&shared.guide_wait,0,0);
+
+	sem_init(&shared.guide_leaves,0,0);
+	
 
 
 	
@@ -154,6 +162,7 @@ void museum_destroy()
 
 	sem_destroy(&shared.visitor_leave);
 	sem_destroy(&shared.guide_wait);
+	sem_destroy(&shared.guide_leaves);
 
 
 	
@@ -176,55 +185,55 @@ void visitor(int id)
 	{
 		if(shared.tickets>shared.numIn){
 			shared.numIn++;
-			
 			pthread_mutex_unlock(&shared.lock);
-
 			sem_post(&shared.visitors_arrive);
+			
+			
+			
 			sem_wait(&shared.visitor_limit);
+
+			sem_post(&shared.guide_wait);
 			
 
 			sem_wait(&shared.guide_admits);
 			
 			pthread_mutex_lock(&shared.lock);
 			{
-				
 				shared.inside_visitor++;
+			}
+			pthread_mutex_unlock(&shared.lock);
 			
-				//printf("Visitor side number of visitors_waiting %d \n",shared.visitors_waiting);
+			visitor_tours(id);
+
+			
+			
 				
+			visitor_leaves(id);
+			pthread_mutex_lock(&shared.lock);
+			{
+			
+				shared.all_visitors++;
+				shared.inside_visitor--;
+
+				if(shared.inside_visitor==0){
+					for(int i=0;i<shared.inside_guide;i++)
+					
+					sem_post(&shared.guide_leaves);
+					
+
+				}
+
+				printf("the number of inside %d \n",shared.inside_visitor);
+				
+				
+
 			}
 			pthread_mutex_unlock(&shared.lock);
 
-			visitor_tours(id);
-
-				
-				
-			visitor_leaves(id);
+			
 			sem_post(&shared.visitor_leave);
-
-				pthread_mutex_lock(&shared.lock);
-				{
-		
-					shared.inside_visitor--;
-					
-					
-
-		
-		
-
-				}
-				pthread_mutex_unlock(&shared.lock);
 			
-
-				
-
-				sem_post(&shared.visitor_limit);
-
-
-			
-
-
-
+			//sem_post(&shared.visitor_leave);
 
 		}
 		else{
@@ -252,90 +261,86 @@ void guide(int id)
 {
 	guide_arrives(id);
 
+	sem_wait(&shared.visitors_arrive);
+
 	sem_wait(&shared.guide_limit);
-	pthread_mutex_lock(&shared.lock);
-	printf("the number of inside visitor %d\n",shared.inside_visitor);
-	printf("the number of inside guide %d\n",shared.inside_guide);
 	
-	pthread_mutex_unlock(&shared.lock);
 	
 	guide_enters(id);
-
-	
-	
-	
 
 	pthread_mutex_lock(&shared.lock);
 	{
 		shared.inside_guide++;
-	}
-	pthread_mutex_unlock(&shared.lock);
+			
+
+	}pthread_mutex_unlock(&shared.lock);
+
+
+	
+	
+	
+
+	
 
 
 	for(int i=0;i<10;i++){
 
-
 		pthread_mutex_lock(&shared.lock);
 		{
-			if(shared.visitors_waiting==0){
-				//shared.inside_guide--;
-				// if(shared.inside_guide==0){
-
-				// }
-				pthread_mutex_unlock(&shared.lock);
+			if(shared.all_visitors==shared.tickets){
+			pthread_mutex_unlock(&shared.lock);
 				break;
 			}
-		// printf("number of visitors_waiting %d \n",shared.visitors_waiting);
-		// printf("number of inside visitor %d \n",shared.inside_visitor);
 
 		}pthread_mutex_unlock(&shared.lock);
+
+
 		
 
 		
 		
-		sem_wait(&shared.visitors_arrive);
 
-			guide_admits(id);
+		sem_wait(&shared.guide_wait);
 		
-		pthread_mutex_lock(&shared.lock);
-		{
 		
-			shared.visitors_waiting--;
-
-		}pthread_mutex_unlock(&shared.lock);
+		guide_admits(id);
+	
+		
 		
 		
 		
 		sem_post(&shared.guide_admits);
 
 		sem_wait(&shared.visitor_leave);
+		
 
-			
 
-	}
+		sem_post(&shared.visitor_limit);
+		
+		}
+
+
 	
-	pthread_mutex_lock(&shared.lock);
+
+
+
+		
+				
+		sem_wait(&shared.guide_leaves);
+		printf("the number of guide leave\n");
 	
-		shared.inside_guide--;
-		if(shared.inside_guide==1)
+
+		
+	
+		guide_leaves(id);
+		pthread_mutex_lock(&shared.lock);
 		{
-			pthread_mutex_unlock(&shared.lock);
-			sem_wait(&shared.guide_wait);
-			guide_leaves(id);
-			printf("in the lock2 the number of inside guide %d\n",shared.inside_guide);
-		}
-		else{
-			pthread_mutex_unlock(&shared.lock);
-			guide_leaves(id);
-			sem_post(&shared.guide_wait);
-			printf("in the lock the number of inside guide %d\n",shared.inside_guide);
-		}
+			shared.inside_guide--;
 
+
+		}pthread_mutex_unlock(&shared.lock);
 		
-	
-		//guide_leaves(id);
 		
-		sem_init(&shared.guide_wait,0,0);
 		
 		sem_post(&shared.guide_limit);
 
