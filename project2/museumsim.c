@@ -200,7 +200,7 @@ void visitor(int id)
 		
 					shared.inside_visitor--;
 					
-					if(shared.inside_visitor==0&&shared.visitors_waiting==0){
+					if(shared.inside_visitor==0){
 			
 					sem_post(&shared.clear_waiting);
 					
@@ -296,7 +296,7 @@ void guide(int id)
 		
 		sem_post(&shared.guide_admits);
 
-		//sem_wait(&shared.visitor_leave);
+		sem_wait(&shared.visitor_leave);
 
 			
 
