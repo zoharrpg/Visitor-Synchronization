@@ -182,14 +182,15 @@ void visitor(int id)
 			{
 				
 				shared.inside_visitor++;
+			
+				//printf("Visitor side number of visitors_waiting %d \n",shared.visitors_waiting);
 				
 			}
 			pthread_mutex_unlock(&shared.lock);
 
 			visitor_tours(id);
 
-			
-			
+				
 				
 				visitor_leaves(id);
 
@@ -197,10 +198,11 @@ void visitor(int id)
 				{
 		
 					shared.inside_visitor--;
-					shared.visitors_waiting--;
+					
 					if(shared.inside_visitor==0){
 			
 					sem_post(&shared.clear_waiting);
+					
 					}
 
 		
@@ -208,6 +210,9 @@ void visitor(int id)
 
 				}
 				pthread_mutex_unlock(&shared.lock);
+			
+
+				
 
 				sem_post(&shared.visitor_limit);
 
@@ -251,6 +256,8 @@ void guide(int id)
 
 
 	for(int i=0;i<10;i++){
+
+
 		pthread_mutex_lock(&shared.lock);
 		{
 			if(shared.visitors_waiting==0){
@@ -261,17 +268,33 @@ void guide(int id)
 				pthread_mutex_unlock(&shared.lock);
 				break;
 			}
+		printf("number of visitors_waiting %d \n",shared.visitors_waiting);
+		printf("number of inside visitor %d \n",shared.inside_visitor);
 
 		}pthread_mutex_unlock(&shared.lock);
-		sem_wait(&shared.visitors_arrive);
 		
-		guide_admits(id);
+
+		
+		
+		sem_wait(&shared.visitors_arrive);
+
+			guide_admits(id);
+		
+		pthread_mutex_lock(&shared.lock);
+		{
+		
+			shared.visitors_waiting--;
+
+		}pthread_mutex_unlock(&shared.lock);
+		
 		
 		
 		sem_post(&shared.guide_admits);
+
 			
 
 	}
+
 
 	sem_wait(&shared.clear_waiting);
 	guide_leaves(id);
