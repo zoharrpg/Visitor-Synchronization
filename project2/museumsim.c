@@ -48,6 +48,7 @@ struct shared_data {
 	sem_t available_visitors;
 
 	sem_t visitor_leave;
+	sem_t guide_wait;
 	// sem_t visitor_waiting;
 
 	// sem_t available_ticket;
@@ -111,6 +112,10 @@ void museum_init(int num_guides, int num_visitors)
 	sem_init(&shared.available_visitors,0,0);
 
 	sem_init(&shared.visitor_leave,0,0);
+
+	sem_init(&shared.guide_wait,0,0);
+
+
 	
 	
 	
@@ -148,6 +153,7 @@ void museum_destroy()
 	sem_destroy(&shared.available_visitors);
 
 	sem_destroy(&shared.visitor_leave);
+	sem_destroy(&shared.guide_wait);
 
 
 	
@@ -273,8 +279,8 @@ void guide(int id)
 				pthread_mutex_unlock(&shared.lock);
 				break;
 			}
-		printf("number of visitors_waiting %d \n",shared.visitors_waiting);
-		printf("number of inside visitor %d \n",shared.inside_visitor);
+		// printf("number of visitors_waiting %d \n",shared.visitors_waiting);
+		// printf("number of inside visitor %d \n",shared.inside_visitor);
 
 		}pthread_mutex_unlock(&shared.lock);
 		
@@ -301,6 +307,21 @@ void guide(int id)
 			
 
 	}
+	pthread_mutex_lock(&shared.lock);
+	
+		shared.inside_guide--;
+		if(shared.inside_guide==1)
+		{
+			pthread_mutex_unlock(&shared.lock);
+			sem_wait(&shared.guide_wait);
+		}
+		else{
+			pthread_mutex_unlock(&shared.lock);
+			sem_post(&shared.guide_wait);
+		}
+
+	
+	
 
 
 	sem_wait(&shared.clear_waiting);
