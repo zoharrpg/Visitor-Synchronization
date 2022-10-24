@@ -170,12 +170,13 @@ void visitor(int id)
 {
 	/*check if there is available tickets, if not just leave and return*/
 
+	visitor_arrives(id);
 	
 	pthread_mutex_lock(&shared.lock);
 	{
 		if(shared.tickets>shared.numIn){
 			shared.numIn++;
-			visitor_arrives(id);
+			
 			pthread_mutex_unlock(&shared.lock);
 
 			sem_post(&shared.visitors_arrive);
@@ -206,11 +207,7 @@ void visitor(int id)
 		
 					shared.inside_visitor--;
 					
-					if(shared.inside_visitor==0){
-			
-					sem_post(&shared.clear_waiting);
 					
-					}
 
 		
 		
@@ -324,7 +321,7 @@ void guide(int id)
 	
 
 
-	sem_wait(&shared.clear_waiting);
+	
 	guide_leaves(id);
 	sem_post(&shared.guide_limit);
 
